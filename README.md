@@ -20,7 +20,7 @@ This repository is managed as a `pnpm` workspace:
 
 1. Clone the repository:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/leonardo-zhu/gh-mcp.git
    cd gh-mcp
    ```
 
