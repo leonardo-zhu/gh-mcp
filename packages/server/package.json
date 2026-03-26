@@ -1,0 +1,21 @@
+{
+  "name": "@gh-mcp/server",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "../../dist/index.js",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=../../dist/index.js",
+    "dev": "tsx src/index.ts",
+    "start": "node ../../dist/index.js"
+  },
+  "dependencies": {
+    "@gh-mcp/auth": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.28.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}
