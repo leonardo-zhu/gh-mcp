@@ -19,12 +19,14 @@ This repository is managed as a `pnpm` workspace:
 ### Installation
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/leonardo-zhu/gh-mcp.git
    cd gh-mcp
    ```
 
 2. Install dependencies:
+
    ```bash
    pnpm install
    ```
@@ -38,20 +40,20 @@ This repository is managed as a `pnpm` workspace:
 
 The server relies on environment variables for GitHub App authentication. You can define these in your system or within your MCP client configuration:
 
-| Variable | Description | Required |
-| :--- | :--- | :---: |
-| `GITHUB_APP_ID` | Your GitHub App ID | ✅ |
-| `GITHUB_PRIVATE_KEY` | Your GitHub App's private key (content, not path) | ✅ |
-| `GITHUB_INSTALLATION_ID` | Default Installation ID for the app | ❌ |
-| `GITHUB_CLIENT_ID` | Your GitHub App Client ID | ❌ |
-| `GITHUB_CLIENT_SECRET` | Your GitHub App Client Secret | ❌ |
+| Variable                 | Description                                       | Required |
+| :----------------------- | :------------------------------------------------ | :------: |
+| `GITHUB_APP_ID`          | Your GitHub App ID                                |    ✅    |
+| `GITHUB_PRIVATE_KEY`     | Your GitHub App's private key (content, not path) |    ✅    |
+| `GITHUB_INSTALLATION_ID` | Default Installation ID for the app               |    ❌    |
+| `GITHUB_CLIENT_ID`       | Your GitHub App Client ID                         |    ❌    |
+| `GITHUB_CLIENT_SECRET`   | Your GitHub App Client Secret                     |    ❌    |
 
 > [!TIP]
 > Use `\n` to represent newlines in the `GITHUB_PRIVATE_KEY` if your configuration format (like JSON) requires a single line.
 
 ## 🤖 Usage with AI Clients
 
-### Claude Desktop
+#### Local Usage (Stdio)
 
 Add the following to your `claude_desktop_config.json`:
 
@@ -60,7 +62,7 @@ Add the following to your `claude_desktop_config.json`:
   "mcpServers": {
     "gh-mcp-server": {
       "command": "node",
-      "args": ["/absolute/path/to/gh-mcp/packages/server/dist/index.js"],
+      "args": ["/absolute/path/to/gh-mcp/dist/index.js"],
       "env": {
         "GITHUB_APP_ID": "...",
         "GITHUB_PRIVATE_KEY": "...",
@@ -71,12 +73,29 @@ Add the following to your `claude_desktop_config.json`:
 }
 ```
 
+#### Remote Usage (SSE)
+
+To run the server in HTTP mode for remote access:
+
+1. Start the server on your backend:
+   ```bash
+   node /path/to/gh-mcp/dist/index.js --sse --port=3000
+   ```
+2. Configure your local client to use the SSE endpoint:
+   - **URL**: `http://your-server-ip:3000/gh-mcp`
+
+> [!NOTE]
+> All logs in both modes are directed to `stderr` to avoid corrupting the Stdio MCP protocol stream.
+
 ## 🛠️ Tools Provided
 
 ### `get_installation_token`
+
 Generates a short-lived GitHub Installation Access Token (IAT).
+
 - **Arguments**: `installationId` (optional number).
 - **Returns**: A plain-text token.
 
 ---
-*Built with ❤️ by Antigravity.*
+
+_Built with ❤️ by Antigravity._
