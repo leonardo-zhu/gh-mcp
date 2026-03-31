@@ -3,12 +3,20 @@ import path from "node:path";
 import fs from "node:fs";
 import { AppConfig } from "./types.js";
 
-// The final bundled index.js will live in /gh-mcp/dist/index.js
-// So resolving ../.env points correctly to /gh-mcp/.env
+// Try a few common monorepo/runtime locations for .env.
+// Priority: current working directory first, then package-relative fallbacks.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const envPath = path.resolve(__dirname, "../.env");
-if (fs.existsSync(envPath)) {
-  process.loadEnvFile(envPath);
+const envCandidates = [
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(__dirname, "../.env"),
+  path.resolve(__dirname, "../../../.env"),
+];
+
+for (const envPath of envCandidates) {
+  if (fs.existsSync(envPath)) {
+    process.loadEnvFile(envPath);
+    break;
+  }
 }
 
 function loadPrivateKey(keyOrPath?: string): string | undefined {

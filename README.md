@@ -84,6 +84,12 @@ To run the server in HTTP mode for remote access:
 2. Configure your local client to use the SSE endpoint:
    - **URL**: `http://your-server-ip:3000/gh-mcp`
 
+You can also start it from the repo root after build:
+
+```bash
+pnpm start:sse
+```
+
 > [!NOTE]
 > All logs in both modes are directed to `stderr` to avoid corrupting the Stdio MCP protocol stream.
 
