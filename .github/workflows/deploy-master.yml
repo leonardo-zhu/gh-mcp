@@ -59,6 +59,8 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DEPLOY_RESTART_CMD: ${{ secrets.DEPLOY_RESTART_CMD }}
+          DEPLOY_START_CMD: ${{ secrets.DEPLOY_START_CMD }}
+          DEPLOY_PM2_NAME: ${{ secrets.DEPLOY_PM2_NAME }}
           RELEASE_ID: ${{ github.sha }}
           KEEP_RELEASES: ${{ secrets.DEPLOY_KEEP_RELEASES }}
         run: |
@@ -72,10 +74,13 @@ jobs:
 
           SSH_PORT="${SSH_PORT:-22}"
           KEEP_RELEASES="${KEEP_RELEASES:-3}"
+          DEPLOY_PM2_NAME="${DEPLOY_PM2_NAME:-gh-mcp}"
           ARCHIVE_NAME="release-${RELEASE_ID}.tgz"
           ARCHIVE_PATH=".release/${ARCHIVE_NAME}"
           DEPLOY_PATH_B64="$(printf "%s" "$DEPLOY_PATH" | base64 | tr -d '\n')"
           DEPLOY_RESTART_CMD_B64="$(printf "%s" "$DEPLOY_RESTART_CMD" | base64 | tr -d '\n')"
+          DEPLOY_START_CMD_B64="$(printf "%s" "${DEPLOY_START_CMD:-}" | base64 | tr -d '\n')"
+          DEPLOY_PM2_NAME_B64="$(printf "%s" "$DEPLOY_PM2_NAME" | base64 | tr -d '\n')"
           RELEASE_ID_B64="$(printf "%s" "$RELEASE_ID" | base64 | tr -d '\n')"
           KEEP_RELEASES_B64="$(printf "%s" "$KEEP_RELEASES" | base64 | tr -d '\n')"
 
@@ -88,11 +93,13 @@ jobs:
             "$ARCHIVE_PATH" "$SSH_USER@$SSH_HOST:/tmp/$ARCHIVE_NAME"
 
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
-            "DEPLOY_PATH_B64='$DEPLOY_PATH_B64' DEPLOY_RESTART_CMD_B64='$DEPLOY_RESTART_CMD_B64' RELEASE_ID_B64='$RELEASE_ID_B64' KEEP_RELEASES_B64='$KEEP_RELEASES_B64' bash -s" << 'EOF'
+            "DEPLOY_PATH_B64='$DEPLOY_PATH_B64' DEPLOY_RESTART_CMD_B64='$DEPLOY_RESTART_CMD_B64' DEPLOY_START_CMD_B64='$DEPLOY_START_CMD_B64' DEPLOY_PM2_NAME_B64='$DEPLOY_PM2_NAME_B64' RELEASE_ID_B64='$RELEASE_ID_B64' KEEP_RELEASES_B64='$KEEP_RELEASES_B64' bash -s" << 'EOF'
           set -euo pipefail
 
           DEPLOY_PATH="$(printf "%s" "$DEPLOY_PATH_B64" | base64 -d)"
           DEPLOY_RESTART_CMD="$(printf "%s" "$DEPLOY_RESTART_CMD_B64" | base64 -d)"
+          DEPLOY_START_CMD="$(printf "%s" "$DEPLOY_START_CMD_B64" | base64 -d)"
+          DEPLOY_PM2_NAME="$(printf "%s" "$DEPLOY_PM2_NAME_B64" | base64 -d)"
           RELEASE_ID="$(printf "%s" "$RELEASE_ID_B64" | base64 -d)"
           KEEP_RELEASES="$(printf "%s" "$KEEP_RELEASES_B64" | base64 -d)"
           ARCHIVE_NAME="release-${RELEASE_ID}.tgz"
@@ -106,7 +113,18 @@ jobs:
           tar -xzf "/tmp/$ARCHIVE_NAME" -C "$RELEASE_DIR" --strip-components=1
           ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
           cd "$CURRENT_LINK"
-          bash -lc "$DEPLOY_RESTART_CMD"
+
+          if pm2 describe "$DEPLOY_PM2_NAME" >/dev/null 2>&1; then
+            # Existing process: run restart command.
+            bash -lc "$DEPLOY_RESTART_CMD"
+          else
+            # First deploy: run explicit start command when provided, otherwise use a safe default.
+            if [ -n "$DEPLOY_START_CMD" ]; then
+              bash -lc "$DEPLOY_START_CMD"
+            else
+              pm2 start "$CURRENT_LINK/dist/index.js" --name "$DEPLOY_PM2_NAME" -- --sse --host=0.0.0.0 --port=3000
+            fi
+          fi
 
           rm -f "/tmp/$ARCHIVE_NAME"
           ls -1dt "$RELEASES_DIR"/* 2>/dev/null | tail -n +$((KEEP_RELEASES + 1)) | xargs -r rm -rf
