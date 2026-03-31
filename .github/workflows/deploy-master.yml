@@ -21,7 +21,6 @@ jobs:
           SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
           SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DEPLOY_BRANCH: ${{ secrets.DEPLOY_BRANCH }}
           DEPLOY_RESTART_CMD: ${{ secrets.DEPLOY_RESTART_CMD }}
@@ -31,7 +30,6 @@ jobs:
           : "${SSH_HOST:?missing DEPLOY_SSH_HOST}"
           : "${SSH_USER:?missing DEPLOY_SSH_USER}"
           : "${SSH_PRIVATE_KEY:?missing DEPLOY_SSH_PRIVATE_KEY}"
-          : "${SSH_KNOWN_HOSTS:?missing DEPLOY_SSH_KNOWN_HOSTS}"
           : "${DEPLOY_PATH:?missing DEPLOY_PATH}"
           : "${DEPLOY_RESTART_CMD:?missing DEPLOY_RESTART_CMD}"
 
@@ -45,10 +43,7 @@ jobs:
           chmod 700 ~/.ssh
           printf "%s" "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          printf "%s\n" "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
             "DEPLOY_PATH_B64='$DEPLOY_PATH_B64' DEPLOY_BRANCH_B64='$DEPLOY_BRANCH_B64' DEPLOY_RESTART_CMD_B64='$DEPLOY_RESTART_CMD_B64' bash -s" << 'EOF'
           set -euo pipefail
 
