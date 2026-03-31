@@ -15,15 +15,52 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Deploy via SSH
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Pack Release
+        env:
+          RELEASE_ID: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p .release/app
+          rsync -a ./ .release/app/ \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '.claude' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude 'tests' \
+            --exclude '*.log'
+          tar -C .release -czf ".release/release-${RELEASE_ID}.tgz" app
+
+      - name: Deploy Built Artifact via SSH
         env:
           SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
           SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
           SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          DEPLOY_BRANCH: ${{ secrets.DEPLOY_BRANCH }}
           DEPLOY_RESTART_CMD: ${{ secrets.DEPLOY_RESTART_CMD }}
+          RELEASE_ID: ${{ github.sha }}
+          KEEP_RELEASES: ${{ secrets.DEPLOY_KEEP_RELEASES }}
         run: |
           set -euo pipefail
 
@@ -34,31 +71,43 @@ jobs:
           : "${DEPLOY_RESTART_CMD:?missing DEPLOY_RESTART_CMD}"
 
           SSH_PORT="${SSH_PORT:-22}"
-          DEPLOY_BRANCH="${DEPLOY_BRANCH:-master}"
+          KEEP_RELEASES="${KEEP_RELEASES:-3}"
+          ARCHIVE_NAME="release-${RELEASE_ID}.tgz"
+          ARCHIVE_PATH=".release/${ARCHIVE_NAME}"
           DEPLOY_PATH_B64="$(printf "%s" "$DEPLOY_PATH" | base64 | tr -d '\n')"
-          DEPLOY_BRANCH_B64="$(printf "%s" "$DEPLOY_BRANCH" | base64 | tr -d '\n')"
           DEPLOY_RESTART_CMD_B64="$(printf "%s" "$DEPLOY_RESTART_CMD" | base64 | tr -d '\n')"
+          RELEASE_ID_B64="$(printf "%s" "$RELEASE_ID" | base64 | tr -d '\n')"
+          KEEP_RELEASES_B64="$(printf "%s" "$KEEP_RELEASES" | base64 | tr -d '\n')"
 
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf "%s" "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+
+          scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P "$SSH_PORT" \
+            "$ARCHIVE_PATH" "$SSH_USER@$SSH_HOST:/tmp/$ARCHIVE_NAME"
+
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
-            "DEPLOY_PATH_B64='$DEPLOY_PATH_B64' DEPLOY_BRANCH_B64='$DEPLOY_BRANCH_B64' DEPLOY_RESTART_CMD_B64='$DEPLOY_RESTART_CMD_B64' bash -s" << 'EOF'
+            "DEPLOY_PATH_B64='$DEPLOY_PATH_B64' DEPLOY_RESTART_CMD_B64='$DEPLOY_RESTART_CMD_B64' RELEASE_ID_B64='$RELEASE_ID_B64' KEEP_RELEASES_B64='$KEEP_RELEASES_B64' bash -s" << 'EOF'
           set -euo pipefail
 
           DEPLOY_PATH="$(printf "%s" "$DEPLOY_PATH_B64" | base64 -d)"
-          DEPLOY_BRANCH="$(printf "%s" "$DEPLOY_BRANCH_B64" | base64 -d)"
           DEPLOY_RESTART_CMD="$(printf "%s" "$DEPLOY_RESTART_CMD_B64" | base64 -d)"
+          RELEASE_ID="$(printf "%s" "$RELEASE_ID_B64" | base64 -d)"
+          KEEP_RELEASES="$(printf "%s" "$KEEP_RELEASES_B64" | base64 -d)"
+          ARCHIVE_NAME="release-${RELEASE_ID}.tgz"
+          RELEASES_DIR="$DEPLOY_PATH/releases"
+          RELEASE_DIR="$RELEASES_DIR/$RELEASE_ID"
+          CURRENT_LINK="$DEPLOY_PATH/current"
 
-          cd "$DEPLOY_PATH"
+          mkdir -p "$RELEASES_DIR"
+          mkdir -p "$RELEASE_DIR"
 
-          git fetch --all --prune
-          git checkout "$DEPLOY_BRANCH"
-          git reset --hard "origin/$DEPLOY_BRANCH"
-
-          pnpm install --frozen-lockfile
-          pnpm build
-
+          tar -xzf "/tmp/$ARCHIVE_NAME" -C "$RELEASE_DIR" --strip-components=1
+          ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
+          cd "$CURRENT_LINK"
           bash -lc "$DEPLOY_RESTART_CMD"
+
+          rm -f "/tmp/$ARCHIVE_NAME"
+          ls -1dt "$RELEASES_DIR"/* 2>/dev/null | tail -n +$((KEEP_RELEASES + 1)) | xargs -r rm -rf
           EOF
