@@ -115,6 +115,7 @@ This repository includes a GitHub Actions workflow that deploys automatically wh
 
 - Workflow file: `.github/workflows/deploy-master.yml`
 - Trigger: `push` to `master` (and manual `workflow_dispatch`)
+- Strategy: build artifact in Actions runner, upload to server, then PM2 reload/start on server
 
 Create these repository secrets before enabling it:
 
@@ -122,17 +123,21 @@ Create these repository secrets before enabling it:
 - `DEPLOY_SSH_PORT`: SSH port (optional, defaults to `22`)
 - `DEPLOY_SSH_USER`: SSH username
 - `DEPLOY_SSH_PRIVATE_KEY`: private key content used by GitHub Actions
-- `DEPLOY_PATH`: absolute path of the repo on your server (for example `/srv/gh-mcp`)
-- `DEPLOY_BRANCH`: branch to deploy (optional, defaults to `master`)
-- `DEPLOY_RESTART_CMD`: restart command on your server (for example `pm2 restart gh-mcp`)
+- `DEPLOY_PATH`: release root path on your server (for example `/srv/gh-mcp`)
+- `DEPLOY_PM2_NAME`: PM2 app name (optional, defaults to `gh-mcp`)
+- `DEPLOY_ENV_FILE`: shared env file path on server (optional, defaults to `/root/global-secrets.env`)
+- `DEPLOY_SERVICE_ENV_FILE`: service-specific env file path on server (optional)
+- `DEPLOY_KEEP_RELEASES`: number of releases to keep (optional, defaults to `3`)
 
-What the deploy job does on your server:
+What the deploy job does:
 
-1. `git fetch --all --prune`
-2. `git checkout <branch>`
-3. `git reset --hard origin/<branch>`
-4. `pnpm install --frozen-lockfile`
-5. `pnpm build`
-6. Run `DEPLOY_RESTART_CMD`
+1. Build with `pnpm install --frozen-lockfile` and `pnpm build` on GitHub Actions runner.
+2. Pack release tarball and upload to server via SSH.
+3. Extract into `$DEPLOY_PATH/releases/<sha>`, then switch `$DEPLOY_PATH/current` symlink.
+4. Source `DEPLOY_ENV_FILE` and optional `DEPLOY_SERVICE_ENV_FILE`.
+5. Use PM2 ecosystem file to reload/start:
+   - `pm2 reload ecosystem.config.cjs --only <name> --update-env` (if exists)
+   - `pm2 start ecosystem.config.cjs --only <name> --update-env` (first deploy)
+6. Clean old releases, keeping latest `DEPLOY_KEEP_RELEASES`.
 
 _Built with ❤️ by Antigravity._
