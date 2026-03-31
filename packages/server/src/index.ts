@@ -9,6 +9,7 @@ import { parseArgs } from "node:util";
 
 // Load workspace plugins/tools
 import { registerAuthTools } from "@gh-mcp/auth";
+import { registerWebhookProxyFromEnv } from "@gh-mcp/webhook-proxy";
 
 const server = new McpServer({
   name: "gh-mcp-global-server",
@@ -47,6 +48,13 @@ async function main() {
     app.get("/healthz", (_req, res) => {
       res.status(200).json({ ok: true });
     });
+
+    const webhookProxy = registerWebhookProxyFromEnv(app);
+    if (webhookProxy.enabled) {
+      console.error(`🔁 GitHub Webhook Proxy enabled at ${webhookProxy.path}`);
+    } else {
+      console.error("ℹ️ GitHub Webhook Proxy disabled (missing env vars)");
+    }
 
     // StreamableHTTPServerTransport handles both GET (SSE) and POST in one endpoint
     app.all("/gh-mcp", async (req, res) => {
