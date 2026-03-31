@@ -8,6 +8,12 @@ This repository is managed as a `pnpm` workspace:
 
 - **[`packages/auth`](./packages/auth)**: A modular library handling GitHub App authentication. It registers the `get_installation_token` tool, which leverages `@octokit/auth-app` and maintains a robust in-memory token cache.
 - **[`packages/server`](./packages/server)**: The primary entry point. It initializes a global MCP server, mounts tools from the `auth` package, and provides a Stdio transport interface for integration with AI clients.
+- **[`packages/webhook-proxy`](./packages/webhook-proxy)**: Verifies GitHub webhook signatures and forwards payloads to OpenClaw hooks endpoints.
+
+## 🔗 Integration Docs
+
+- [OpenClaw Webhook Proxy Integration](./docs/openclaw-webhook-proxy.md): end-to-end setup for GitHub App webhook -> gh-mcp proxy -> OpenClaw mapped hooks.
+- [Webhook E2E Local Test](./tests/webhook-e2e/README.md): reusable local signed-webhook test with mock OpenClaw.
 
 ## 🚀 Getting Started
 
@@ -46,7 +52,6 @@ The server relies on environment variables for GitHub App authentication. You ca
 | `GITHUB_PRIVATE_KEY`     | Your GitHub App's private key (content, not path) |    ✅    |
 | `GITHUB_INSTALLATION_ID` | Default Installation ID for the app               |    ❌    |
 | `GITHUB_CLIENT_ID`       | Your GitHub App Client ID                         |    ❌    |
-| `GITHUB_CLIENT_SECRET`   | Your GitHub App Client Secret                     |    ❌    |
 
 > [!TIP]
 > Use `\n` to represent newlines in the `GITHUB_PRIVATE_KEY` if your configuration format (like JSON) requires a single line.
@@ -103,5 +108,31 @@ Generates a short-lived GitHub Installation Access Token (IAT).
 - **Returns**: A plain-text token.
 
 ---
+
+## 🚢 Auto Deploy On `master`
+
+This repository includes a GitHub Actions workflow that deploys automatically when `master` is updated:
+
+- Workflow file: `.github/workflows/deploy-master.yml`
+- Trigger: `push` to `master` (and manual `workflow_dispatch`)
+
+Create these repository secrets before enabling it:
+
+- `DEPLOY_SSH_HOST`: target server IP/domain
+- `DEPLOY_SSH_PORT`: SSH port (optional, defaults to `22`)
+- `DEPLOY_SSH_USER`: SSH username
+- `DEPLOY_SSH_PRIVATE_KEY`: private key content used by GitHub Actions
+- `DEPLOY_PATH`: absolute path of the repo on your server (for example `/srv/gh-mcp`)
+- `DEPLOY_BRANCH`: branch to deploy (optional, defaults to `master`)
+- `DEPLOY_RESTART_CMD`: restart command on your server (for example `pm2 restart gh-mcp`)
+
+What the deploy job does on your server:
+
+1. `git fetch --all --prune`
+2. `git checkout <branch>`
+3. `git reset --hard origin/<branch>`
+4. `pnpm install --frozen-lockfile`
+5. `pnpm build`
+6. Run `DEPLOY_RESTART_CMD`
 
 _Built with ❤️ by Antigravity._
