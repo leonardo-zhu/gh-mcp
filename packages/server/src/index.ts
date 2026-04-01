@@ -4,7 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
 
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { parseArgs } from "node:util";
 
 // Load workspace plugins/tools
@@ -18,6 +18,26 @@ const server = new McpServer({
 
 // Register all tools onto the singular global server instance
 registerAuthTools(server);
+
+function parseBearerToken(value: string | undefined): string {
+  if (!value) {
+    return "";
+  }
+  const normalized = value.trim();
+  if (!normalized.startsWith("Bearer ")) {
+    return "";
+  }
+  return normalized.slice("Bearer ".length).trim();
+}
+
+function secureTokenEquals(provided: string, expected: string): boolean {
+  const providedBytes = Buffer.from(provided, "utf8");
+  const expectedBytes = Buffer.from(expected, "utf8");
+  if (providedBytes.length !== expectedBytes.length) {
+    return false;
+  }
+  return timingSafeEqual(providedBytes, expectedBytes);
+}
 
 async function main() {
   const { values } = parseArgs({
@@ -56,8 +76,24 @@ async function main() {
       console.error("ℹ️ GitHub Webhook Proxy disabled (missing env vars)");
     }
 
+    const mcpApiKey = (process.env.MCP_API_KEY || "").trim();
+    if (!mcpApiKey) {
+      console.error("⚠️ MCP_API_KEY is not configured. /gh-mcp will reject all requests.");
+    }
+
     // StreamableHTTPServerTransport handles both GET (SSE) and POST in one endpoint
     app.all("/gh-mcp", async (req, res) => {
+      if (!mcpApiKey) {
+        res.status(503).json({ error: "MCP API key is not configured on server" });
+        return;
+      }
+
+      const providedToken = parseBearerToken(req.header("authorization"));
+      if (!providedToken || !secureTokenEquals(providedToken, mcpApiKey)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
       try {
         await transport.handleRequest(req, res);
       } catch (error) {
