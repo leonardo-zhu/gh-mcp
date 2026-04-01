@@ -44,7 +44,7 @@ This repository is managed as a `pnpm` workspace:
 
 ## ⚙️ Configuration
 
-The server relies on environment variables for GitHub App authentication. You can define these in your system or within your MCP client configuration:
+The server relies on environment variables for GitHub App authentication and HTTP endpoint access control. You can define these in your system or within your MCP client configuration:
 
 | Variable                 | Description                                       | Required |
 | :----------------------- | :------------------------------------------------ | :------: |
@@ -52,6 +52,7 @@ The server relies on environment variables for GitHub App authentication. You ca
 | `GITHUB_PRIVATE_KEY`     | Your GitHub App's private key (content, not path) |    ✅    |
 | `GITHUB_INSTALLATION_ID` | Default Installation ID for the app               |    ❌    |
 | `GITHUB_CLIENT_ID`       | Your GitHub App Client ID                         |    ❌    |
+| `MCP_API_KEY`            | Bearer token required for all HTTP `/gh-mcp` requests |    ✅(HTTP mode)    |
 
 > [!TIP]
 > Use `\n` to represent newlines in the `GITHUB_PRIVATE_KEY` if your configuration format (like JSON) requires a single line.
@@ -88,11 +89,32 @@ To run the server in HTTP mode for remote access:
    ```
 2. Configure your local client to use the SSE endpoint:
    - **URL**: `http://your-server-ip:3000/gh-mcp`
+   - **Auth header**: `Authorization: Bearer <MCP_API_KEY>`
 
 You can also start it from the repo root after build:
 
 ```bash
 pnpm start:sse
+```
+
+Quick connectivity test:
+
+```bash
+curl -i -X POST 'http://127.0.0.1:3000/gh-mcp' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'Content-Type: application/json' \
+  -H 'MCP-Protocol-Version: 2025-03-26' \
+  -H 'Authorization: Bearer <MCP_API_KEY>' \
+  -d '{
+    "jsonrpc":"2.0",
+    "id":1,
+    "method":"initialize",
+    "params":{
+      "protocolVersion":"2025-03-26",
+      "capabilities":{},
+      "clientInfo":{"name":"curl-test","version":"1.0.0"}
+    }
+  }'
 ```
 
 > [!NOTE]

@@ -48,7 +48,10 @@ OPENCLAW_HOOKS_TOKEN=your_openclaw_hooks_token
 # Optional
 WEBHOOK_PROXY_PATH=/gh-webhook
 WEBHOOK_PROXY_BODY_LIMIT=1mb
+MCP_API_KEY=your_mcp_http_api_key
 ```
+
+`MCP_API_KEY` is required for `/gh-mcp` HTTP access, but GitHub webhook deliveries to `/gh-webhook` still use `X-Hub-Signature-256` validation and do not use this Bearer token.
 
 ## OpenClaw Configuration (Mapped Endpoint)
 
