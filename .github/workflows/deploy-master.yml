@@ -74,7 +74,7 @@ jobs:
           SSH_PORT="${SSH_PORT:-22}"
           KEEP_RELEASES="${KEEP_RELEASES:-3}"
           DEPLOY_PM2_NAME="${DEPLOY_PM2_NAME:-gh-mcp}"
-          DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-/root/global-secrets.env}"
+          DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-/opt/projects/.secrets/global.env}"
           DEPLOY_SERVICE_ENV_FILE="${DEPLOY_SERVICE_ENV_FILE:-}"
           ARCHIVE_NAME="release-${RELEASE_ID}.tgz"
           ARCHIVE_PATH=".release/${ARCHIVE_NAME}"
