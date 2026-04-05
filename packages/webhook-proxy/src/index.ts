@@ -75,8 +75,13 @@ export function registerWebhookProxyRoutes(app: Express, options: WebhookProxyOp
   app.post(path, express.raw({ type: "*/*", limit: bodyLimit }), async (req: Request, res: Response) => {
     const rawBody = getRawBody(req);
     const signatureHeader = req.header("x-hub-signature-256");
+    const event = req.header("x-github-event") || "unknown";
+    const delivery = req.header("x-github-delivery") || "unknown";
+
+    console.log(`[webhook-proxy] Received ${event} event (delivery: ${delivery})`);
 
     if (!verifyGithubSignature(rawBody, signatureHeader, options.githubWebhookSecret)) {
+      console.warn(`[webhook-proxy] Rejecting delivery ${delivery}: Invalid signature`);
       res.status(401).json({ error: "Invalid webhook signature" });
       return;
     }
@@ -86,6 +91,7 @@ export function registerWebhookProxyRoutes(app: Express, options: WebhookProxyOp
 
     const deliveryKey = getDeliveryKey(req, rawBody);
     if (seenDeliveries.has(deliveryKey)) {
+      console.log(`[webhook-proxy] Delivery ${delivery} deduplicated (already seen)`);
       res.status(202).json({ ok: true, deduplicated: true });
       return;
     }
@@ -93,6 +99,7 @@ export function registerWebhookProxyRoutes(app: Express, options: WebhookProxyOp
     const contentType = req.header("content-type") || "application/json";
 
     try {
+      console.log(`[webhook-proxy] Forwarding delivery ${delivery} to OpenClaw...`);
       const upstreamResponse = await fetch(options.openclawWebhookUrl, {
         method: "POST",
         headers: {
@@ -106,6 +113,8 @@ export function registerWebhookProxyRoutes(app: Express, options: WebhookProxyOp
 
       const responseText = await upstreamResponse.text();
       if (!upstreamResponse.ok) {
+        console.error(`[webhook-proxy] Failed to forward delivery ${delivery}: HTTP ${upstreamResponse.status}`);
+        console.error(`[webhook-proxy] Upstream response: ${responseText.slice(0, 500)}`);
         res.status(502).json({
           error: "OpenClaw webhook forwarding failed",
           upstreamStatus: upstreamResponse.status,
@@ -114,6 +123,7 @@ export function registerWebhookProxyRoutes(app: Express, options: WebhookProxyOp
         return;
       }
 
+      console.log(`[webhook-proxy] Successfully forwarded delivery ${delivery} (HTTP ${upstreamResponse.status})`);
       seenDeliveries.set(deliveryKey, { seenAt: now });
 
       res.status(202).json({
@@ -123,6 +133,7 @@ export function registerWebhookProxyRoutes(app: Express, options: WebhookProxyOp
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      console.error(`[webhook-proxy] Error forwarding delivery ${delivery}: ${message}`);
       res.status(502).json({
         error: "OpenClaw webhook forwarding error",
         details: message,
