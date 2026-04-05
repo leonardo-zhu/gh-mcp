@@ -78,10 +78,10 @@ export function registerWebhookProxyRoutes(app: Express, options: WebhookProxyOp
     const event = req.header("x-github-event") || "unknown";
     const delivery = req.header("x-github-delivery") || "unknown";
 
-    console.log(`[webhook-proxy] Received ${event} event (delivery: ${delivery})`);
+    console.error(`[webhook-proxy] Received ${event} event (delivery: ${delivery})`);
 
     if (!verifyGithubSignature(rawBody, signatureHeader, options.githubWebhookSecret)) {
-      console.warn(`[webhook-proxy] Rejecting delivery ${delivery}: Invalid signature`);
+      console.error(`[webhook-proxy] Rejecting delivery ${delivery}: Invalid signature`);
       res.status(401).json({ error: "Invalid webhook signature" });
       return;
     }
@@ -91,7 +91,7 @@ export function registerWebhookProxyRoutes(app: Express, options: WebhookProxyOp
 
     const deliveryKey = getDeliveryKey(req, rawBody);
     if (seenDeliveries.has(deliveryKey)) {
-      console.log(`[webhook-proxy] Delivery ${delivery} deduplicated (already seen)`);
+      console.error(`[webhook-proxy] Delivery ${delivery} deduplicated (already seen)`);
       res.status(202).json({ ok: true, deduplicated: true });
       return;
     }
@@ -99,7 +99,7 @@ export function registerWebhookProxyRoutes(app: Express, options: WebhookProxyOp
     const contentType = req.header("content-type") || "application/json";
 
     try {
-      console.log(`[webhook-proxy] Forwarding delivery ${delivery} to OpenClaw...`);
+      console.error(`[webhook-proxy] Forwarding delivery ${delivery} to OpenClaw...`);
       const upstreamResponse = await fetch(options.openclawWebhookUrl, {
         method: "POST",
         headers: {
@@ -123,7 +123,7 @@ export function registerWebhookProxyRoutes(app: Express, options: WebhookProxyOp
         return;
       }
 
-      console.log(`[webhook-proxy] Successfully forwarded delivery ${delivery} (HTTP ${upstreamResponse.status})`);
+      console.error(`[webhook-proxy] Successfully forwarded delivery ${delivery} (HTTP ${upstreamResponse.status})`);
       seenDeliveries.set(deliveryKey, { seenAt: now });
 
       res.status(202).json({
