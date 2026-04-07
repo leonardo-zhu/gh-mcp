@@ -61,12 +61,11 @@ jobs:
           DEPLOY_PM2_NAME: ${{ secrets.DEPLOY_PM2_NAME }}
           DEPLOY_ENV_FILE: ${{ secrets.DEPLOY_ENV_FILE }}
           DEPLOY_SERVICE_ENV_FILE: ${{ secrets.DEPLOY_SERVICE_ENV_FILE }}
-          RELEASE_ID: ${{ github.sha }}
+          RELEASE_ID: ${{ github.sha }}-${{ github.run_attempt }}
           KEEP_RELEASES: ${{ secrets.DEPLOY_KEEP_RELEASES }}
         run: |
           set -euo pipefail
 
-          : "${SSH_HOST:?missing DEPLOY_SSH_HOST}"
           : "${SSH_USER:?missing DEPLOY_SSH_USER}"
           : "${SSH_PRIVATE_KEY:?missing DEPLOY_SSH_PRIVATE_KEY}"
           : "${DEPLOY_PATH:?missing DEPLOY_PATH}"
