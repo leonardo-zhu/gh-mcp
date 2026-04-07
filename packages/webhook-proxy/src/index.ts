@@ -100,8 +100,8 @@ export function registerWebhookProxyRoutes(app: Express, options: WebhookProxyOp
 
     try {
       console.error(`[webhook-proxy] Forwarding delivery ${delivery} to OpenClaw...`);
-      const path = `${options.openclawWebhookUrl}/github`;
-      const upstreamResponse = await fetch(path, {
+      const upstreamUrl = `${options.openclawWebhookUrl.replace(/\/$/, "")}/github`;
+      const upstreamResponse = await fetch(upstreamUrl, {
         method: "POST",
         headers: {
           "authorization": `Bearer ${options.openclawHooksToken}`,
