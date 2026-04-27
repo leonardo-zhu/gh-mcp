@@ -11,14 +11,6 @@ import { parseArgs } from "node:util";
 import { registerAuthTools } from "@gh-mcp/auth";
 import { registerWebhookProxyFromEnv } from "@gh-mcp/webhook-proxy";
 
-const server = new McpServer({
-  name: "gh-mcp-global-server",
-  version: "1.0.0",
-});
-
-// Register all tools onto the singular global server instance
-registerAuthTools(server);
-
 function parseBearerToken(value: string | undefined): string {
   if (!value) {
     return "";
@@ -58,12 +50,6 @@ async function main() {
   if (isSSE) {
     // --- Remote/HTTP Mode (Streamable HTTP) ---
     const app = express();
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-    });
-
-    // Connect server to transport immediately for HTTP mode
-    await server.connect(transport);
 
     app.get("/healthz", (_req, res) => {
       res.status(200).json({ ok: true });
@@ -81,6 +67,30 @@ async function main() {
       console.error("⚠️ MCP_API_KEY is not configured. /gh-mcp will reject all requests.");
     }
 
+    // Each session gets its own transport+server pair; keyed by mcp-session-id
+    const sessions = new Map<string, StreamableHTTPServerTransport>();
+
+    function createSession(): StreamableHTTPServerTransport {
+      const sessionTransport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (sessionId) => {
+          sessions.set(sessionId, sessionTransport);
+        },
+        onsessionclosed: (sessionId) => {
+          sessions.delete(sessionId);
+        },
+      });
+
+      const sessionServer = new McpServer({
+        name: "gh-mcp-global-server",
+        version: "1.0.0",
+      });
+      registerAuthTools(sessionServer);
+      sessionServer.connect(sessionTransport);
+
+      return sessionTransport;
+    }
+
     // StreamableHTTPServerTransport handles both GET (SSE) and POST in one endpoint
     app.all("/gh-mcp", async (req, res) => {
       if (!mcpApiKey) {
@@ -92,6 +102,21 @@ async function main() {
       if (!providedToken || !secureTokenEquals(providedToken, mcpApiKey)) {
         res.status(401).json({ error: "Unauthorized" });
         return;
+      }
+
+      const sessionId = req.headers["mcp-session-id"] as string | undefined;
+      let transport: StreamableHTTPServerTransport;
+
+      if (sessionId) {
+        const existing = sessions.get(sessionId);
+        if (!existing) {
+          res.status(404).json({ error: "Session not found" });
+          return;
+        }
+        transport = existing;
+      } else {
+        // New client: allocate a fresh transport+server pair
+        transport = createSession();
       }
 
       try {
@@ -126,8 +151,13 @@ async function main() {
     }
   } else {
     // --- Local/Stdio Mode (Default) ---
+    const stdioServer = new McpServer({
+      name: "gh-mcp-global-server",
+      version: "1.0.0",
+    });
+    registerAuthTools(stdioServer);
     const transport = new StdioServerTransport();
-    await server.connect(transport);
+    await stdioServer.connect(transport);
     console.error("🚀 GitHub MCP Local Server is running (Stdio)");
   }
 }
